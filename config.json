@@ -1,0 +1,10 @@
+{
+  "token": "",
+  "prefix": "$",
+  "allowedRoles": [
+    "gen access"
+  ],
+  "allowedChannels": [
+    "940658437862359060" 
+  ]
+}
