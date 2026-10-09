@@ -2,11 +2,15 @@
 
 A standalone recreation of the [Postiz](https://github.com/gitroomhq/postiz-app) social media scheduler UI/UX: layout, design tokens, animations and the main flows. It runs without a backend: all data lives in `localStorage` and a small in-browser "publisher" plays the role of the Postiz workers.
 
+Requires Node.js 20.9 or newer.
+
 ```bash
 cd postiz
 npm install
-npm run dev   # http://localhost:4200
+npm run dev
 ```
+
+Open the URL printed in the terminal (http://localhost:3000, or the next free port if 3000 is taken).
 
 What works:
 - Calendar: day / week / month / list views, current time line, drag and drop to reschedule, customer and channel filters
