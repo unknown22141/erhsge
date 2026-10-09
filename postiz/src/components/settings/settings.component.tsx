@@ -1,7 +1,6 @@
 'use client';
 
 import clsx from 'clsx';
-import { useRouter } from 'next/navigation';
 import { FC, ReactNode, useState } from 'react';
 import { useDb } from '@/lib/db';
 import { useLocalState } from '@/lib/hooks';
@@ -35,15 +34,10 @@ const Card: FC<{ children: ReactNode; className?: string }> = ({ children, class
 const GlobalSettings = () => {
   const user = useDb((s) => s.user);
   const updateUser = useDb((s) => s.updateUser);
-  const shortlink = useDb((s) => s.shortlink);
-  const setShortlink = useDb((s) => s.setShortlink);
-  const emailNotifications = useDb((s) => s.emailNotifications);
-  const setEmailNotifications = useDb((s) => s.setEmailNotifications);
   const { mode, setMode } = useMode();
   const toaster = useToaster();
   const [name, setName] = useState(user.name);
   const [orgName, setOrgName] = useState(user.orgName);
-  const [bio, setBio] = useLocalState('profile-bio', '');
 
   return (
     <div className="flex flex-col gap-[32px]">
@@ -71,7 +65,6 @@ const GlobalSettings = () => {
             <Input label="Full Name" value={name} onChange={(e) => setName(e.target.value)} />
             <Input label="Organization" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
           </div>
-          <Textarea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us a bit about yourself" />
           <div className="flex justify-end mt-[12px]">
             <Button
               onClick={() => {
@@ -93,113 +86,9 @@ const GlobalSettings = () => {
             </div>
             <Slider value={mode === 'dark'} onChange={(v) => setMode(v ? 'dark' : 'light')} />
           </div>
-          <div className="flex items-center justify-between gap-[16px]">
-            <div>
-              <div className="font-[600]">Shortlink preference</div>
-              <div className="text-[13px] text-textItemBlur">Shorten the links of your posts to track the clicks</div>
-            </div>
-            <div className="w-[220px]">
-              <Select hideErrors value={shortlink} onChange={(e) => setShortlink(e.target.value as any)}>
-                <option value="ask">Ask every time</option>
-                <option value="yes">Always shorten</option>
-                <option value="no">Never shorten</option>
-              </Select>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-[16px]">
-            <div>
-              <div className="font-[600]">Email me when a post is published</div>
-              <div className="text-[13px] text-textItemBlur">Get notified about successful posts</div>
-            </div>
-            <Slider value={emailNotifications.success} onChange={(v) => setEmailNotifications({ ...emailNotifications, success: v })} />
-          </div>
-          <div className="flex items-center justify-between gap-[16px]">
-            <div>
-              <div className="font-[600]">Email me when a post fails</div>
-              <div className="text-[13px] text-textItemBlur">Get notified about errors</div>
-            </div>
-            <Slider value={emailNotifications.failure} onChange={(v) => setEmailNotifications({ ...emailNotifications, failure: v })} />
-          </div>
         </Card>
       </Section>
     </div>
-  );
-};
-
-const AddMemberModal: FC<{ close: () => void }> = ({ close }) => {
-  const invite = useDb((s) => s.inviteMember);
-  const toaster = useToaster();
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'USER' | 'ADMIN'>('USER');
-  const [sendEmail, setSendEmail] = useState(true);
-  return (
-    <div className="flex flex-col gap-[10px] min-w-[400px]">
-      {sendEmail && <Input label="Email" placeholder="Enter email" value={email} onChange={(e) => setEmail(e.target.value)} />}
-      <Select label="Role" value={role} onChange={(e) => setRole(e.target.value as any)}>
-        <option value="USER">User</option>
-        <option value="ADMIN">Admin</option>
-      </Select>
-      <div className="flex gap-[8px] items-center cursor-pointer" onClick={() => setSendEmail(!sendEmail)}>
-        <Check value={sendEmail} onChange={setSendEmail} />
-        <div>Send invitation via email?</div>
-      </div>
-      <Button
-        className="mt-[18px]"
-        disabled={sendEmail && !/^\S+@\S+\.\S+$/.test(email)}
-        onClick={async () => {
-          if (sendEmail) {
-            invite(email, role);
-            toaster.show('Invitation link sent', 'success');
-          } else {
-            try {
-              await navigator.clipboard.writeText(`${window.location.origin}/auth?invite=${makeId(12)}`);
-            } catch {}
-            toaster.show('Link copied to clipboard', 'success');
-          }
-          close();
-        }}
-      >
-        {sendEmail ? 'Send Invitation Link' : 'Copy Link'}
-      </Button>
-    </div>
-  );
-};
-
-const TeamsComponent = () => {
-  const team = useDb((s) => s.team);
-  const user = useDb((s) => s.user);
-  const removeMember = useDb((s) => s.removeMember);
-  const modals = useModals();
-  return (
-    <Section
-      title="Team Members"
-      description="Invite your assistant or team member to manage your account"
-      action={<Button onClick={() => modals.openModal({ title: 'Add Member', children: (close) => <AddMemberModal close={close} /> })}>Add another member</Button>}
-    >
-      <Card className="flex flex-col gap-[4px] !p-[8px]">
-        {team.map((member) => (
-          <div key={member.id} className="flex items-center gap-[12px] p-[12px] rounded-[8px] hover:bg-boxHover animate-normalFadeIn">
-            <div className="w-[36px] h-[36px] rounded-full bg-[#612BD3] text-white flex items-center justify-center font-[600]">{member.email[0].toUpperCase()}</div>
-            <div className="flex-1">
-              <div className="font-[600]">{member.name}</div>
-              <div className="text-[13px] text-textItemBlur">{member.email}</div>
-            </div>
-            <div className="text-[13px] px-[10px] py-[4px] rounded-full bg-btnSimple">{member.role === 'ADMIN' ? 'Admin' : member.role === 'SUPERADMIN' ? 'Super Admin' : 'User'}</div>
-            {member.id !== user.id && (
-              <Button
-                secondary
-                className="!h-[32px] !px-[12px] text-[13px]"
-                onClick={async () => {
-                  if (await deleteDialog('Are you sure you want to remove this team member?', 'Yes, remove it')) removeMember(member.id);
-                }}
-              >
-                Remove
-              </Button>
-            )}
-          </div>
-        ))}
-      </Card>
-    </Section>
   );
 };
 
@@ -234,7 +123,19 @@ const WebhookModal: FC<{ webhook?: Webhook; close: () => void }> = ({ webhook, c
         <Button
           secondary
           disabled={!valid}
-          onClick={() => toaster.show('Webhook test sent successfully', 'success')}
+          onClick={async () => {
+            try {
+              await fetch(url, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event: 'test', message: 'Test webhook from Postiz' }),
+              });
+              toaster.show('Test request sent', 'success');
+            } catch {
+              toaster.show('Could not reach the webhook URL', 'warning');
+            }
+          }}
         >
           Send Test
         </Button>
@@ -260,7 +161,7 @@ const Webhooks = () => {
   const open = (webhook?: Webhook) =>
     modals.openModal({ title: webhook ? 'Edit Webhook' : 'Add Webhook', children: (close) => <WebhookModal webhook={webhook} close={close} /> });
   return (
-    <Section title="Webhooks" description="Webhooks are a way to get notified when something happens in Postiz via an HTTP request." action={<Button onClick={() => open()}>Add a webhook</Button>}>
+    <Section title="Webhooks" description="Postiz sends a POST request to these URLs every time a post is published or fails." action={<Button onClick={() => open()}>Add a webhook</Button>}>
       <Card className="!p-0 overflow-hidden">
         {!webhooks.length && <div className="p-[24px] text-center text-textItemBlur">No webhooks yet</div>}
         {webhooks.map((w) => (
@@ -429,59 +330,15 @@ const Sets = () => {
   );
 };
 
-const PublicApi = () => {
-  const toaster = useToaster();
-  const [key, setKey] = useLocalState('public-api-key', makeId(32));
-  const [reveal, setReveal] = useState(false);
-  return (
-    <Section title="Public API" description="Use Postiz API to integrate with your tools.">
-      <Card className="flex flex-col gap-[16px]">
-        <div className="flex items-center gap-[8px] bg-newBgColorInner border border-newTableBorder rounded-[8px] h-[44px] px-[16px] font-mono text-[14px]">
-          <div className="flex-1 truncate">{reveal ? key : key.slice(0, 4) + '•'.repeat(24)}</div>
-          <button className="text-[13px] underline" onClick={() => setReveal(!reveal)}>
-            {reveal ? 'Hide' : 'Reveal'}
-          </button>
-        </div>
-        <div className="flex gap-[8px]">
-          <Button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(key);
-              } catch {}
-              toaster.show('Key copied to clipboard', 'success');
-            }}
-          >
-            Copy Key
-          </Button>
-          <Button
-            secondary
-            onClick={async () => {
-              if (await deleteDialog('Rotating the key will break every integration that uses the current one.', 'Yes, rotate it')) {
-                setKey(makeId(32));
-                toaster.show('API key rotated', 'success');
-              }
-            }}
-          >
-            Rotate Key
-          </Button>
-        </div>
-      </Card>
-    </Section>
-  );
-};
-
 const tabs = [
   { tab: 'global_settings', label: 'Global Settings', component: GlobalSettings },
-  { tab: 'teams', label: 'Teams', component: TeamsComponent },
   { tab: 'webhooks', label: 'Webhooks', component: Webhooks },
   { tab: 'sets', label: 'Sets', component: Sets },
   { tab: 'signatures', label: 'Signatures', component: Signatures },
-  { tab: 'api', label: 'Public API', component: PublicApi },
 ];
 
 export const SettingsComponent = () => {
   const [tab, setTab] = useLocalState('settings-tab', 'global_settings');
-  const router = useRouter();
   const current = tabs.find((t) => t.tab === tab) || tabs[0];
   const Component = current.component;
   return (
@@ -503,11 +360,6 @@ export const SettingsComponent = () => {
               {label}
             </div>
           ))}
-        </div>
-        <div className="mt-4 mobile:mt-[8px]">
-          <div className="text-red-400 cursor-pointer hover:underline" onClick={() => router.push('/auth/login')}>
-            Logout from Postiz
-          </div>
         </div>
       </div>
       <div className="bg-newBgColorInner flex-1 min-w-0 flex-col flex p-[20px] mobile:p-[12px] gap-[12px] overflow-y-auto">

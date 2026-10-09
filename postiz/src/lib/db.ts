@@ -57,11 +57,7 @@ interface DbState {
   updateUser: (data: Partial<User>) => void;
 
   // integrations
-  addIntegration: (
-    identifier: string,
-    name: string,
-    display: string
-  ) => Integration;
+  addIntegration: (data: Parameters<typeof createIntegration>[0]) => Integration;
   updateIntegration: (id: string, data: Partial<Integration>) => void;
   deleteIntegration: (id: string) => void;
   moveIntegrationToCustomer: (id: string, customerId: string) => void;
@@ -72,7 +68,16 @@ interface DbState {
   createPosts: (input: CreatePostInput) => string;
   deleteGroup: (group: string) => void;
   changePostDate: (id: string, date: string) => void;
-  publishDue: () => Post[];
+  applyResults: (
+    results: Array<{
+      postId: string;
+      integrationId: string;
+      state: 'PUBLISHED' | 'ERROR';
+      releaseURL?: string;
+      error?: string;
+      authError?: boolean;
+    }>
+  ) => Post[];
   findSlot: () => string;
 
   // tags
@@ -112,8 +117,24 @@ export const useDb = create<DbState>()(
 
       updateUser: (data) => set((s) => ({ user: { ...s.user, ...data } })),
 
-      addIntegration: (identifier, name, display) => {
-        const integration = createIntegration(identifier, name, display);
+      addIntegration: (data) => {
+        // connecting the same account again updates it
+        const existing = get().integrations.find(
+          (p) => p.identifier === data.identifier && p.internalId === data.internalId
+        );
+        if (existing) {
+          const updated = {
+            ...existing,
+            name: data.name,
+            display: data.display,
+            picture: data.picture || existing.picture,
+            credentials: data.credentials,
+            refreshNeeded: false,
+          };
+          set((s) => ({ integrations: s.integrations.map((p) => (p.id === existing.id ? updated : p)) }));
+          return updated;
+        }
+        const integration = createIntegration(data);
         set((s) => ({ integrations: [...s.integrations, integration] }));
         return integration;
       },
@@ -193,62 +214,43 @@ export const useDb = create<DbState>()(
               : p
           ),
         })),
-      publishDue: () => {
-        const now = dayjs();
-        const due = get().posts.filter(
-          (p) => p.state === 'QUEUE' && !dayjs(p.publishDate).isAfter(now)
-        );
-        if (!due.length) {
-          return [];
-        }
-        const integrations = get().integrations;
-        const published: Post[] = [];
-        set((s) => ({
-          posts: s.posts.map((p) => {
-            if (!due.find((d) => d.id === p.id)) {
-              return p;
+      applyResults: (results) => {
+        const applied: Post[] = [];
+        set((s) => {
+          const repeats: Post[] = [];
+          const posts = s.posts.map((p) => {
+            const result = results.find((r) => r.postId === p.id);
+            if (!result) return p;
+            const next: Post = {
+              ...p,
+              state: result.state,
+              releaseURL: result.releaseURL,
+              error: result.error,
+            };
+            applied.push(next);
+            // a repeated post gets its next occurrence
+            if (result.state === 'PUBLISHED' && p.intervalInDays) {
+              repeats.push({
+                ...p,
+                id: makeId(12),
+                group: makeId(10),
+                state: 'QUEUE',
+                releaseURL: undefined,
+                error: undefined,
+                publishDate: dayjs(p.publishDate).add(p.intervalInDays, 'day').toISOString(),
+              });
             }
-            const integration = integrations.find(
-              (i) => i.id === p.integrationId
-            );
-            const failed = !integration || integration.refreshNeeded;
-            const next: Post = failed
-              ? {
-                  ...p,
-                  state: 'ERROR',
-                  error: 'The channel is disconnected, please reconnect it.',
-                }
-              : {
-                  ...p,
-                  state: 'PUBLISHED',
-                  releaseURL: `https://example.com/${integration!.identifier}/${makeId(8)}`,
-                };
-            published.push(next);
             return next;
-          }),
-        }));
-        // a repeated post gets its next occurrence
-        published
-          .filter((p) => p.intervalInDays)
-          .forEach((p) => {
-            set((s) => ({
-              posts: [
-                ...s.posts,
-                {
-                  ...p,
-                  id: makeId(12),
-                  group: makeId(10),
-                  state: 'QUEUE',
-                  releaseURL: undefined,
-                  error: undefined,
-                  publishDate: dayjs(p.publishDate)
-                    .add(p.intervalInDays!, 'day')
-                    .toISOString(),
-                },
-              ],
-            }));
           });
-        return published;
+          const authFailed = results.filter((r) => r.authError).map((r) => r.integrationId);
+          return {
+            posts: [...posts, ...repeats],
+            integrations: authFailed.length
+              ? s.integrations.map((i) => (authFailed.includes(i.id) ? { ...i, refreshNeeded: true } : i))
+              : s.integrations,
+          };
+        });
+        return applied;
       },
       findSlot: () => {
         const taken = new Set(
@@ -351,6 +353,6 @@ export const useDb = create<DbState>()(
       setEmailNotifications: (emailNotifications) => set({ emailNotifications }),
       resetDemo: () => set({ ...seed() }),
     }),
-    { name: 'postiz-demo-db', version: 1 }
+    { name: 'postiz-db', version: 1 }
   )
 );

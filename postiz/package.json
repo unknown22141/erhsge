@@ -5,11 +5,10 @@
   "description": "A standalone, frontend-only recreation of the Postiz social media scheduler UI/UX",
   "license": "AGPL-3.0",
   "scripts": {
-    "predev": "node scripts/check-node.mjs",
-    "dev": "next dev",
-    "prebuild": "node scripts/check-node.mjs",
-    "build": "next build",
-    "start": "next start",
+    "start": "node scripts/check-node.mjs && next build && next start",
+    "dev": "node scripts/check-node.mjs && next dev",
+    "build": "node scripts/check-node.mjs && next build",
+    "serve": "next start",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

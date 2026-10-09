@@ -10,9 +10,9 @@ import { useToaster } from '@/components/ui/toaster';
 import { useDb } from '@/lib/db';
 import { useClickOutside } from '@/lib/hooks';
 import { getProvider } from '@/lib/providers';
-import { PostValue } from '@/lib/types';
-import { makeId, stripHtml } from '@/lib/utils';
+import { stripHtml } from '@/lib/utils';
 import { countChars, EditorWrapper } from './editor';
+import { pushJobs } from '@/lib/sync';
 import { PicksSocialsComponent } from './picks.socials';
 import { DatePicker, RepeatComponent, TagsComponent } from './post.options';
 import { ShowAllProviders } from './preview';
@@ -126,27 +126,7 @@ export const ManageModal: FC<{ onDone?: () => void }> = () => {
         }
       }
 
-      // offer to shorten the links, like Postiz does
-      const allContent = state.selectedIntegrations.flatMap((p) => valuesFor(state, p.integration.id).map((v) => v.content)).join(' ');
-      let shorten = db.shortlink === 'yes';
-      if (type !== 'draft' && db.shortlink === 'ask' && /https?:\/\/[^\s<"]+/.test(allContent)) {
-        shorten = await decisionModal({
-          title: 'Shortlink',
-          description: 'Do you want to shortlink the URLs? it will let you get statistics over clicks',
-          approveLabel: 'Yes, shortlink it!',
-          cancelLabel: 'No, leave it as is',
-        });
-      }
-      const transform = (values: PostValue[]): PostValue[] =>
-        values.map((v) => ({
-          ...v,
-          content: shorten
-            ? v.content.replace(/https?:\/\/(?!pstz\.link)[^\s<"]+/g, () => `https://pstz.link/${makeId(6)}`)
-            : v.content,
-        }));
-
       setLoading(true);
-      await new Promise((r) => setTimeout(r, 600));
       const publishDate = type === 'now' ? dayjs().toISOString() : state.date.toISOString();
       db.createPosts({
         group: state.group,
@@ -156,12 +136,13 @@ export const ManageModal: FC<{ onDone?: () => void }> = () => {
         intervalInDays: state.repeater || undefined,
         channels: state.selectedIntegrations.map((p) => ({
           integrationId: p.integration.id,
-          values: transform(valuesFor(state, p.integration.id)),
+          values: valuesFor(state, p.integration.id),
           settings: p.settings,
         })),
       });
       setLoading(false);
       modals.closeAll();
+      if (type === 'now') pushJobs(true);
       toaster.show(
         type === 'draft'
           ? 'Saved as draft'

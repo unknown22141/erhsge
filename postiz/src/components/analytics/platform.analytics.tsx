@@ -7,7 +7,7 @@ import dayjs from '@/lib/dayjs';
 import { useDb } from '@/lib/db';
 import { useLocalState } from '@/lib/hooks';
 import { getProvider, platformIcon } from '@/lib/providers';
-import { Integration } from '@/lib/types';
+import { Integration, Post } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/form';
 import { LoadingComponent } from '@/components/ui/loading';
@@ -15,50 +15,41 @@ import { useToaster } from '@/components/ui/toaster';
 import { SVGLine } from '@/components/launches/launches.component';
 import { ChartSocial, TotalList } from './chart.social';
 
-const metricsFor = (identifier: string) => {
-  switch (identifier) {
-    case 'x':
-      return ['Impressions', 'Likes', 'Retweets', 'Replies', 'Bookmarks', 'Followers'];
-    case 'linkedin':
-    case 'linkedin-page':
-      return ['Impressions', 'Reactions', 'Comments', 'Shares', 'Clicks', 'Followers'];
-    case 'instagram':
-    case 'instagram-standalone':
-      return ['Reach', 'Impressions', 'Likes', 'Comments', 'Saves', 'Followers'];
-    case 'youtube':
-      return ['Views', 'Watch time (min)', 'Likes', 'Subscribers', 'Comments', 'Shares'];
-    case 'tiktok':
-      return ['Views', 'Likes', 'Comments', 'Shares', 'Followers', 'Profile views'];
-    default:
-      return ['Impressions', 'Engagement', 'Likes', 'Comments', 'Shares', 'Followers'];
-  }
-};
-
-// deterministic pseudo random numbers, so the charts stay the same between visits
-const rand = (seed: number) => {
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return () => (s = (s * 16807) % 2147483647) / 2147483647;
-};
-const hash = (str: string) => [...str].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
-
 interface AnalyticsDataItem {
   label: string;
   data: TotalList[];
-  percentageChange: number;
+  percentageChange?: number;
 }
 
-const buildAnalytics = (integration: Integration, days: number): AnalyticsDataItem[] =>
-  metricsFor(integration.identifier).map((label, index) => {
-    const r = rand(Math.abs(hash(integration.id + label + days)));
-    const base = 20 + Math.floor(r() * (index === 0 ? 2000 : 300));
-    let value = base;
-    const data = Array.from({ length: days }, (_, i) => {
-      value = Math.max(0, Math.round(value * (0.85 + r() * 0.35)));
-      return { date: dayjs().subtract(days - i, 'day').format('MMM D'), total: value };
-    });
-    return { label, data, percentageChange: Math.round((r() * 60 - 20) * 10) / 10 };
-  });
+// counts of your own posts per day, for one channel
+const buildAnalytics = (integration: Integration, days: number, posts: Post[]): AnalyticsDataItem[] => {
+  const mine = posts.filter((p) => p.integrationId === integration.id);
+  const range = Array.from({ length: days }, (_, i) => dayjs().subtract(days - 1 - i, 'day'));
+  const series = (label: string, filter: (p: Post) => boolean, future = false) => {
+    const dates = future ? range.map((d) => d.add(days - 1, 'day')) : range;
+    const data = dates.map((d) => ({
+      date: d.format('MMM D'),
+      total: mine.filter((p) => filter(p) && dayjs(p.publishDate).isSame(d, 'day')).length,
+    }));
+    const previous = mine.filter(
+      (p) =>
+        filter(p) &&
+        dayjs(p.publishDate).isBefore(range[0], 'day') &&
+        dayjs(p.publishDate).isAfter(range[0].subtract(days + 1, 'day'), 'day')
+    ).length;
+    const current = data.reduce((a, c) => a + c.total, 0);
+    return {
+      label,
+      data,
+      percentageChange: future || !previous ? undefined : Math.round(((current - previous) / previous) * 1000) / 10,
+    };
+  };
+  return [
+    series('Published posts', (p) => p.state === 'PUBLISHED'),
+    series('Failed posts', (p) => p.state === 'ERROR'),
+    series(`Scheduled (next ${days} days)`, (p) => p.state === 'QUEUE', true),
+  ];
+};
 
 const TrendIndicator: FC<{ value: number }> = ({ value }) => {
   const isPositive = value >= 0;
@@ -83,7 +74,7 @@ const AnalyticsCard: FC<{ item: AnalyticsDataItem; index: number }> = ({ item, i
             <div className={clsx('w-[8px] h-[8px] rounded-full', color === 'purple' && 'bg-[#612bd3]', color === 'green' && 'bg-[#32d583]', color === 'blue' && 'bg-[#1d9bf0]')} />
             <span className="text-[15px] font-medium text-newTableText">{item.label}</span>
           </div>
-          <TrendIndicator value={item.percentageChange} />
+          {item.percentageChange !== undefined && <TrendIndicator value={item.percentageChange} />}
         </div>
         <div className="flex-1 px-[12px] py-[8px]">
           <div className="h-[120px] relative">
@@ -100,6 +91,7 @@ const AnalyticsCard: FC<{ item: AnalyticsDataItem; index: number }> = ({ item, i
 
 export const PlatformAnalytics = () => {
   const integrations = useDb((s) => s.integrations);
+  const posts = useDb((s) => s.posts);
   const router = useRouter();
   const toaster = useToaster();
   const [collapseMenu, setCollapseMenu] = useLocalState('collapseMenu', '0');
@@ -108,7 +100,7 @@ export const PlatformAnalytics = () => {
   const [refresh, setRefresh] = useState(false);
   const sorted = useMemo(() => integrations.filter((p) => !p.disabled), [integrations]);
   const currentIntegration = sorted[current] || sorted[0];
-  const data = useMemo(() => (currentIntegration ? buildAnalytics(currentIntegration, days) : []), [currentIntegration, days]);
+  const data = useMemo(() => (currentIntegration ? buildAnalytics(currentIntegration, days, posts) : []), [currentIntegration, days, posts]);
 
   const reload = (fn: () => void) => {
     setRefresh(true);
@@ -125,7 +117,7 @@ export const PlatformAnalytics = () => {
           <br />
           You have to add Social Media channels
         </div>
-        <div className="text-[20px]">Supported: {['X', 'LinkedIn', 'Instagram', 'Facebook', 'YouTube', 'TikTok', 'Threads', 'Pinterest'].join(', ')}</div>
+        <div className="text-[20px]">Supported: Bluesky, Mastodon, Telegram, Discord</div>
         <Button onClick={() => router.push('/launches')}>Go to the calendar to add channels</Button>
       </div>
     );
@@ -213,7 +205,7 @@ export const PlatformAnalytics = () => {
               </div>
             )}
           </div>
-          <div className="text-[12px] text-textItemBlur">Analytics are simulated in this demo.</div>
+          <div className="text-[12px] text-textItemBlur">Counted from the posts you scheduled and published with this app.</div>
         </div>
       </div>
     </>

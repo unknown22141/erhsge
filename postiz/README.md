@@ -1,24 +1,42 @@
-# Postiz clone (frontend)
+# Postiz (local)
 
-A standalone recreation of the [Postiz](https://github.com/gitroomhq/postiz-app) social media scheduler UI/UX: layout, design tokens, animations and the main flows. It runs without a backend: all data lives in `localStorage` and a small in-browser "publisher" plays the role of the Postiz workers.
+A local social media scheduler with the [Postiz](https://github.com/gitroomhq/postiz-app) interface. It starts empty, you connect your own accounts, and scheduled posts are published for real by the local server.
+
+## Start
 
 Requires Node.js 20.9 or newer.
 
 ```bash
-cd postiz
 npm install
-npm run dev
+npm start
 ```
 
-Open the URL printed in the terminal (http://localhost:3000, or the next free port if 3000 is taken).
+`npm start` builds the app once (about 30 seconds) and then serves it. Pages load instantly after that. Open http://localhost:3000.
 
-What works:
-- Calendar: day / week / month / list views, current time line, drag and drop to reschedule, customer and channel filters
-- Post composer: global vs per-channel editing, threads/comments with delays, character limits per platform, bold/underline, emoji, media library, signatures, tags, repeat, date picker, per-provider settings and validation, draft / schedule / post now, live previews (X, LinkedIn, Facebook, Instagram, YouTube)
-- Channels: add (simulated OAuth), rename, picture, groups/customers, time slots, preferences, disable, delete, reconnect
-- Analytics, Media library (upload, drag and drop), Settings (profile, team, webhooks, sets, signatures, API key), Billing, Agent chat, login/register, public post preview page with comments
-- Dark/light mode, notifications, posting streak, mobile layout
+`npm run dev` also works, but every page is compiled the first time you open it, so it feels slow.
 
-Screenshots are in `preview/`. Use "Reset demo data" in the account menu to restore the seed data.
+## Channels that publish for real
 
-Design tokens, icons and platform assets come from Postiz, which is licensed under AGPL-3.0 (see `LICENSE`).
+| Platform | What you need |
+| --- | --- |
+| Bluesky | Your handle and an app password (bsky.app → Settings → Privacy and security → App passwords) |
+| Mastodon | Your server URL and an access token (Preferences → Development → New application, scopes `read:accounts write:statuses write:media`) |
+| Telegram | A bot token from @BotFather, with the bot added as admin of your channel or group |
+| Discord | A channel webhook URL (Channel settings → Integrations → Webhooks) |
+
+The other platforms (X, LinkedIn, Instagram, Facebook, TikTok, YouTube...) need a developer app registered with each platform and approved API keys, so they are greyed out. The self-hosted Postiz supports them once you have those keys.
+
+## How publishing works
+
+- The server checks for due posts every 10 seconds and publishes them, even when the browser is closed, as long as `npm start` is running.
+- If the computer was off when a post was due, it is published as soon as you start the app again.
+- Threads and comments, pictures and videos, delays between comments and repeated posts are supported.
+- Webhooks (Settings → Webhooks) receive a POST for every published or failed post.
+
+## Where your data is
+
+- Channels, posts and settings: in your browser (the same browser you use to open the app).
+- Uploaded media and the publishing queue: in the `.data/` folder of the project.
+- Your keys never leave your computer except to go to the platform they belong to.
+
+Design, icons and platform assets come from Postiz, licensed under AGPL-3.0 (see `LICENSE`).

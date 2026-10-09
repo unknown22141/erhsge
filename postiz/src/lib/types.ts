@@ -19,6 +19,8 @@ export interface Integration {
   // posting slots, in minutes from midnight
   time: { time: number }[];
   preferences: { autoComment?: boolean };
+  // the keys used to post, kept on this computer only
+  credentials?: Record<string, string>;
 }
 
 export interface MediaItem {

@@ -13,7 +13,7 @@ import { useModals } from '@/components/ui/modal';
 import { useToaster } from '@/components/ui/toaster';
 import { useMode } from '@/components/layout/mode';
 import { openComposer } from '@/components/new-launch/open.composer';
-import { AddProviderButton } from './add.provider';
+import { AddProviderButton, reconnectChannel } from './add.provider';
 import { CalendarProvider } from './calendar.context';
 import { Calendar } from './calendar';
 import { ChannelMenu } from './channel.menu';
@@ -64,17 +64,9 @@ const EditGroupNameModal: FC<{ customer: Customer; close: () => void }> = ({ cus
   );
 };
 
-const reconnect = (integration: Integration) => {
-  useDb.getState().updateIntegration(integration.id, { refreshNeeded: false });
-};
-
 const MenuComponent: FC<{ integration: Integration; collapsed: boolean }> = ({ integration, collapsed }) => {
-  const toaster = useToaster();
   const [, drag, dragPreview] = useDrag(() => ({ type: 'menu', item: { id: integration.id } }), [integration.id]);
-  const doReconnect = () => {
-    reconnect(integration);
-    toaster.show('Channel reconnected', 'success');
-  };
+  const doReconnect = () => reconnectChannel(integration);
   return (
     <div
       ref={dragPreview as any}
@@ -264,7 +256,7 @@ export const LaunchesComponent = () => {
               <MenuGroupComponent key={menu.id || 'none'} group={menu} collapsed={collapsed} />
             ))}
           </div>
-          <div className="mt-[5px] text-center flex flex-col mobile:hidden text-[12px] text-textItemBlur group-[.sidebar]:hidden">v2 · demo</div>
+          
         </div>
       </div>
       <div className="bg-newBgColorInner flex-1 min-w-0 flex-col flex p-[20px] mobile:p-[12px] gap-[12px] mobile:min-h-[600px]">

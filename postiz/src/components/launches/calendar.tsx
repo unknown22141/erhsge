@@ -147,11 +147,6 @@ const CalendarItem: FC<{
             <OpenPost />
           </div>
         )}
-        {state === 'PUBLISHED' && (
-          <div className="hidden group-hover:block hover:scale-125 transition-transform cursor-pointer" onClick={stop(actions.statistics(post))}>
-            <StatisticsIcon />
-          </div>
-        )}
         <div className="hidden group-hover:block hover:scale-125 transition-transform cursor-pointer" onClick={stop(actions.preview(post))}>
           <Preview />
         </div>

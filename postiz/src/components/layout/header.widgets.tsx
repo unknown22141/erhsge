@@ -71,7 +71,6 @@ export const OrganizationSelector = () => {
             <div className="opacity-0 animate-normalFadeDown py-[8px] absolute top-[100%] mt-[10px] end-0 w-[260px] bg-newBgColorInner text-textColor border-newTableBorder border rounded-[12px] shadow-menu flex flex-col z-[600] text-[14px]">
               <div className="px-[16px] py-[8px] border-b border-newTableBorder mb-[4px]">
                 <div className="font-[600]">{user.name}</div>
-                <div className="text-textItemBlur text-[12px]">{user.email}</div>
               </div>
               <div
                 className="px-[16px] py-[8px] hover:bg-boxHover cursor-pointer"
@@ -88,10 +87,10 @@ export const OrganizationSelector = () => {
                   setOpen(false);
                   if (
                     await decisionModal({
-                      title: 'Reset demo data?',
+                      title: 'Delete all data?',
                       description:
-                        'All your channels, posts and media will be replaced with the demo data.',
-                      approveLabel: 'Yes, reset',
+                        'All your channels, posts and media on this computer will be deleted.',
+                      approveLabel: 'Yes, delete everything',
                       cancelLabel: 'Cancel',
                       destructive: true,
                     })
@@ -100,16 +99,7 @@ export const OrganizationSelector = () => {
                   }
                 }}
               >
-                Reset demo data
-              </div>
-              <div
-                className="px-[16px] py-[8px] hover:bg-boxHover cursor-pointer text-red-400"
-                onClick={() => {
-                  setOpen(false);
-                  router.push('/auth/login');
-                }}
-              >
-                Logout
+                <span className="text-red-400">Delete all data</span>
               </div>
             </div>
           )}

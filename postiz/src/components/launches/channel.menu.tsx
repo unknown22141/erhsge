@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { FC, ReactNode, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { Input, Select, Slider } from '@/components/ui/form';
+import { Input, Select } from '@/components/ui/form';
 import { DelayIcon, PlusIcon, TrashIcon } from '@/components/ui/icons';
 import { decisionModal, deleteDialog, useModals } from '@/components/ui/modal';
 import { useToaster } from '@/components/ui/toaster';
@@ -205,32 +205,6 @@ const TimeTableModal: FC<{ integration: Integration; close: () => void }> = ({ i
   );
 };
 
-const PreferencesModal: FC<{ integration: Integration; close: () => void }> = ({ integration, close }) => {
-  const update = useDb((s) => s.updateIntegration);
-  const toaster = useToaster();
-  const [autoComment, setAutoComment] = useState(!!integration.preferences.autoComment);
-  return (
-    <div className="flex flex-col gap-[16px] min-w-[400px]">
-      <div className="flex items-center justify-between gap-[16px] p-[16px] rounded-[12px] bg-newTableHeader">
-        <div>
-          <div className="font-[600]">Auto comment with the post link</div>
-          <div className="text-[13px] text-textItemBlur">Add a first comment with the link of the post</div>
-        </div>
-        <Slider value={autoComment} onChange={setAutoComment} />
-      </div>
-      <Button
-        onClick={() => {
-          update(integration.id, { preferences: { ...integration.preferences, autoComment } });
-          toaster.show('Settings Updated', 'success');
-          close();
-        }}
-      >
-        Save
-      </Button>
-    </div>
-  );
-};
-
 const MenuRow: FC<{ icon: ReactNode; label: string; onClick: () => void; danger?: boolean }> = ({ icon, label, onClick, danger }) => (
   <div
     className={clsx('flex gap-[12px] items-center py-[8px] px-[10px] rounded-[6px] hover:bg-boxHover transition-colors cursor-pointer', danger && 'text-red-400')}
@@ -281,10 +255,7 @@ export const ChannelMenu: FC<{ integration: Integration; onReconnect: () => void
         toaster.show('Channel ID copied to clipboard', 'success');
       },
     },
-    ...(integration.refreshNeeded
-      ? [{ icon: '↻', label: 'Reconnect channel', onClick: () => { setShow(null); onReconnect(); } }]
-      : []),
-    { icon: '⚙', label: 'Preferences', onClick: open('Additional Settings', PreferencesModal) },
+    { icon: '↻', label: 'Reconnect channel', onClick: () => { setShow(null); onReconnect(); } },
     { icon: '🖼', label: 'Change Bot Picture', onClick: open('Change Bot Picture', BotPictureModal) },
     { icon: 'Aa', label: 'Rename channel', onClick: open('Rename channel', RenameModal) },
     { icon: '⇄', label: 'Move / add to group', onClick: open('Move / Add to group', GroupModal) },

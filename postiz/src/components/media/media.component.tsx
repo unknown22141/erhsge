@@ -8,35 +8,42 @@ import { DeleteCircleIcon, NoMediaIcon } from '@/components/ui/icons';
 import { deleteDialog, openModal, useModals } from '@/components/ui/modal';
 import { useToaster } from '@/components/ui/toaster';
 
-// Reads a file into a data url; pictures are scaled down so they fit in localStorage
-export const readMediaFile = (file: File): Promise<{ path: string; type: 'image' | 'video' }> =>
-  new Promise((resolve, reject) => {
-    if (file.type.startsWith('video/')) {
-      resolve({ path: URL.createObjectURL(file), type: 'video' });
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('Unsupported file'));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const max = 1080;
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve({ path: canvas.toDataURL('image/jpeg', 0.82), type: 'image' });
-      };
-      img.onerror = () => reject(new Error('Could not read image'));
-      img.src = reader.result as string;
+const uploadBlob = async (blob: Blob, name: string) => {
+  const form = new FormData();
+  form.append('file', blob, name);
+  const res = await fetch('/api/upload', { method: 'POST', body: form });
+  if (!res.ok) throw new Error('Upload failed');
+  return (await res.json()).path as string;
+};
+
+// Uploads a file to the local server; big pictures are scaled down first
+export const readMediaFile = async (file: File): Promise<{ path: string; type: 'image' | 'video' }> => {
+  if (file.type.startsWith('video/')) {
+    return { path: await uploadBlob(file, file.name), type: 'video' };
+  }
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Unsupported file');
+  }
+  if (file.type === 'image/gif' || file.size < 900 * 1024) {
+    return { path: await uploadBlob(file, file.name), type: 'image' };
+  }
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 2048;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not read image'))), 'image/jpeg', 0.85);
+      URL.revokeObjectURL(img.src);
     };
-    reader.onerror = () => reject(new Error('Could not read file'));
-    reader.readAsDataURL(file);
+    img.onerror = () => reject(new Error('Could not read image'));
+    img.src = URL.createObjectURL(file);
   });
+  return { path: await uploadBlob(blob, file.name.replace(/\.[^.]+$/, '') + '.jpg'), type: 'image' };
+};
 
 const PAGE_SIZE = 18;
 

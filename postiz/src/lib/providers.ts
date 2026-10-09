@@ -22,6 +22,10 @@ export interface ProviderDefinition {
   toolTip?: string;
   isExternal?: boolean;
   customFields?: { key: string; label: string; type: 'text' | 'password' }[];
+  // can connect and publish for real from this app
+  real?: boolean;
+  connect?: { key: string; label: string; type: 'text' | 'password'; placeholder?: string; default?: string }[];
+  help?: string[];
   settings?: SettingField[];
   // a video is required to post
   requiresMedia?: boolean;
@@ -275,6 +279,29 @@ export const providers: ProviderDefinition[] = [
     editor: 'normal',
     maxChars: 500,
     comments: true,
+    real: true,
+    connect: [
+      { key: 'instance', label: 'Server URL', type: 'text', default: 'https://mastodon.social' },
+      { key: 'token', label: 'Access token', type: 'password' },
+    ],
+    help: [
+      'On your server open Preferences → Development → New application',
+      'Give it the read:accounts, write:statuses and write:media scopes, save it',
+      'Open the application and copy "Your access token"',
+    ],
+    settings: [
+      {
+        key: 'visibility',
+        label: 'Visibility',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'public', label: 'Public' },
+          { value: 'unlisted', label: 'Unlisted' },
+          { value: 'private', label: 'Followers only' },
+        ],
+      },
+    ],
   },
   {
     identifier: 'bluesky',
@@ -282,10 +309,15 @@ export const providers: ProviderDefinition[] = [
     editor: 'normal',
     maxChars: 300,
     comments: true,
-    customFields: [
-      { key: 'service', label: 'Service', type: 'text' },
-      { key: 'identifier', label: 'Identifier', type: 'text' },
-      { key: 'password', label: 'Password', type: 'password' },
+    real: true,
+    connect: [
+      { key: 'identifier', label: 'Handle', type: 'text', placeholder: 'yourname.bsky.social' },
+      { key: 'password', label: 'App password', type: 'password', placeholder: 'xxxx-xxxx-xxxx-xxxx' },
+      { key: 'service', label: 'Service', type: 'text', default: 'https://bsky.social' },
+    ],
+    help: [
+      'Open bsky.app → Settings → Privacy and security → App passwords',
+      'Create an app password and paste it here (not your real password)',
     ],
   },
   {
@@ -312,6 +344,16 @@ export const providers: ProviderDefinition[] = [
     editor: 'html',
     maxChars: 4096,
     comments: true,
+    real: true,
+    connect: [
+      { key: 'token', label: 'Bot token', type: 'password', placeholder: '123456789:ABC...' },
+      { key: 'chat', label: 'Channel or group', type: 'text', placeholder: '@yourchannel or -100123456789' },
+    ],
+    help: [
+      'Message @BotFather on Telegram, send /newbot and copy the token',
+      'Add the bot as an administrator of your channel or group',
+      'Use the channel @username, or the numeric chat id for private chats',
+    ],
   },
   {
     identifier: 'nostr',
@@ -331,20 +373,13 @@ export const providers: ProviderDefinition[] = [
     identifier: 'discord',
     name: 'Discord',
     editor: 'markdown',
-    maxChars: 1980,
+    maxChars: 2000,
     comments: true,
-    settings: [
-      {
-        key: 'channel',
-        label: 'Channel',
-        type: 'select',
-        required: true,
-        options: [
-          { value: 'general', label: '#general' },
-          { value: 'announcements', label: '#announcements' },
-          { value: 'updates', label: '#updates' },
-        ],
-      },
+    real: true,
+    connect: [{ key: 'webhook', label: 'Webhook URL', type: 'password', placeholder: 'https://discord.com/api/webhooks/...' }],
+    help: [
+      'In Discord open the channel settings → Integrations → Webhooks',
+      'Create a webhook and click "Copy Webhook URL"',
     ],
   },
   {
