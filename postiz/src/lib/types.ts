@@ -21,6 +21,8 @@ export interface Integration {
   preferences: { autoComment?: boolean };
   // the keys used to post, kept on this computer only
   credentials?: Record<string, string>;
+  // setting choices that come from the account, e.g. Pinterest boards
+  dynamicOptions?: Record<string, { value: string; label: string }[]>;
 }
 
 export interface MediaItem {

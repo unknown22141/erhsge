@@ -21,6 +21,8 @@ export interface Result {
   authError?: boolean;
   integrationId: string;
   at: string;
+  // refreshed tokens, saved back in the browser
+  credentials?: Credentials;
 }
 
 interface WebhookTarget {
@@ -40,6 +42,8 @@ const state: SchedulerState = ((globalThis as any).__postizScheduler ||= { runni
 const JOBS = 'jobs.json';
 const RESULTS = 'results.json';
 const WEBHOOKS = 'webhooks.json';
+const SETTINGS = 'settings.json';
+const TOKENS = 'tokens.json';
 
 let lock: Promise<unknown> = Promise.resolve();
 // serializes reads and writes of the json files
@@ -49,7 +53,7 @@ const locked = <T>(fn: () => Promise<T>): Promise<T> => {
   return next;
 };
 
-export const syncJobs = (jobs: Job[], webhooks: WebhookTarget[]) =>
+export const syncJobs = (jobs: Job[], webhooks: WebhookTarget[], settings: { publicUrl?: string } = {}) =>
   locked(async () => {
     const results = await readJson<Result[]>(RESULTS, []);
     const done = new Set(results.map((r) => r.postId));
@@ -57,6 +61,7 @@ export const syncJobs = (jobs: Job[], webhooks: WebhookTarget[]) =>
     const pending = jobs.filter((j) => !state.running.has(j.postId) && !done.has(j.postId));
     await writeJson(JOBS, pending);
     await writeJson(WEBHOOKS, webhooks);
+    await writeJson(SETTINGS, settings);
     return pending.length;
   });
 
@@ -91,11 +96,27 @@ const callWebhooks = async (job: Job, result: Result) => {
   );
 };
 
+const newer = (a?: Credentials, b?: Credentials) => (Number(a?.savedAt || 0) >= Number(b?.savedAt || 0) ? a : b);
+
 const publish = async (job: Job) => {
   let result: Result;
+  let refreshed: Credentials | undefined;
   try {
-    const { releaseURL } = await getServerProvider(job.identifier).publish(job.credentials, job.values, job.settings || {});
-    result = { postId: job.postId, integrationId: job.integrationId, state: 'PUBLISHED', releaseURL, at: new Date().toISOString() };
+    const { publicUrl } = await readJson<{ publicUrl?: string }>(SETTINGS, {});
+    const tokens = await readJson<Record<string, Credentials>>(TOKENS, {});
+    // a token refreshed by an earlier post is newer than the one the browser sent
+    const credentials = newer(tokens[job.integrationId], job.credentials) || job.credentials;
+    const { releaseURL } = await getServerProvider(job.identifier).publish(credentials, job.values, job.settings || {}, {
+      publicUrl,
+      updateCredentials: (c) => {
+        refreshed = { ...c, savedAt: String(Date.now()) };
+        locked(async () => {
+          const all = await readJson<Record<string, Credentials>>(TOKENS, {});
+          await writeJson(TOKENS, { ...all, [job.integrationId]: refreshed! });
+        });
+      },
+    });
+    result = { postId: job.postId, integrationId: job.integrationId, state: 'PUBLISHED', releaseURL, at: new Date().toISOString(), credentials: refreshed };
     console.log(`[postiz] published ${job.postId} on ${job.identifier}: ${releaseURL}`);
   } catch (e: any) {
     result = {
@@ -105,6 +126,7 @@ const publish = async (job: Job) => {
       error: e?.message || String(e),
       authError: e instanceof AuthError,
       at: new Date().toISOString(),
+      credentials: refreshed,
     };
     console.log(`[postiz] failed ${job.postId} on ${job.identifier}: ${result.error}`);
   }

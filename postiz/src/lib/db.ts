@@ -51,6 +51,9 @@ interface DbState {
   team: TeamMember[];
   notifications: Notification[];
   shortlink: 'ask' | 'yes' | 'no';
+  // the https address this app is reachable at, for Instagram / Threads media and sign in redirects
+  publicUrl: string;
+  setPublicUrl: (publicUrl: string) => void;
   emailNotifications: { success: boolean; failure: boolean };
 
   // user
@@ -76,6 +79,7 @@ interface DbState {
       releaseURL?: string;
       error?: string;
       authError?: boolean;
+      credentials?: Record<string, string>;
     }>
   ) => Post[];
   findSlot: () => string;
@@ -113,11 +117,15 @@ export const useDb = create<DbState>()(
     (set, get) => ({
       ...seed(),
       shortlink: 'ask',
+      publicUrl: '',
+      setPublicUrl: (publicUrl) => set({ publicUrl: publicUrl.trim().replace(/\/$/, '') }),
       emailNotifications: { success: true, failure: true },
 
       updateUser: (data) => set((s) => ({ user: { ...s.user, ...data } })),
 
-      addIntegration: (data) => {
+      addIntegration: (input) => {
+        // newer than any token the server refreshed for the previous connection
+        const data = { ...input, credentials: input.credentials && { ...input.credentials, savedAt: String(Date.now()) } };
         // connecting the same account again updates it
         const existing = get().integrations.find(
           (p) => p.identifier === data.identifier && p.internalId === data.internalId
@@ -129,6 +137,7 @@ export const useDb = create<DbState>()(
             display: data.display,
             picture: data.picture || existing.picture,
             credentials: data.credentials,
+            dynamicOptions: data.dynamicOptions || existing.dynamicOptions,
             refreshNeeded: false,
           };
           set((s) => ({ integrations: s.integrations.map((p) => (p.id === existing.id ? updated : p)) }));
@@ -243,11 +252,14 @@ export const useDb = create<DbState>()(
             return next;
           });
           const authFailed = results.filter((r) => r.authError).map((r) => r.integrationId);
+          const refreshed = results.filter((r) => r.credentials);
           return {
             posts: [...posts, ...repeats],
-            integrations: authFailed.length
-              ? s.integrations.map((i) => (authFailed.includes(i.id) ? { ...i, refreshNeeded: true } : i))
-              : s.integrations,
+            integrations: s.integrations.map((i) => {
+              const tokens = refreshed.find((r) => r.integrationId === i.id)?.credentials;
+              const next = tokens && Number(tokens.savedAt || 0) > Number(i.credentials?.savedAt || 0) ? { ...i, credentials: tokens } : i;
+              return authFailed.includes(i.id) ? { ...next, refreshNeeded: true } : next;
+            }),
           };
         });
         return applied;
@@ -351,7 +363,7 @@ export const useDb = create<DbState>()(
 
       setShortlink: (shortlink) => set({ shortlink }),
       setEmailNotifications: (emailNotifications) => set({ emailNotifications }),
-      resetDemo: () => set({ ...seed() }),
+      resetDemo: () => set({ ...seed(), publicUrl: '' }),
     }),
     { name: 'postiz-db', version: 1 }
   )

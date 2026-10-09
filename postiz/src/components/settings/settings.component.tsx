@@ -330,8 +330,69 @@ const Sets = () => {
   );
 };
 
+const PublicUrl = () => {
+  const publicUrl = useDb((s) => s.publicUrl);
+  const setPublicUrl = useDb((s) => s.setPublicUrl);
+  const toaster = useToaster();
+  const [value, setValue] = useState(publicUrl);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message?: string } | null>(null);
+
+  const test = async (url: string) => {
+    setLoading(true);
+    setStatus(null);
+    try {
+      // the health route is touched first so the server knows its own id
+      await fetch('/api/health');
+      const res = await fetch('/api/public-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+      setStatus(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Section
+      title="Public URL"
+      description="Instagram and Threads download your pictures and videos from a public link, and some platforms only accept https sign in addresses. A free tunnel gives this app a public https address."
+    >
+      <Card className="flex flex-col gap-[12px]">
+        <ol className="list-decimal ps-[18px] text-[14px] text-textItemBlur flex flex-col gap-[6px]">
+          <li>
+            Keep this app running, then in a second terminal run{' '}
+            <code className="text-newTextColor bg-newBgColorInner border border-newTableBorder rounded-[6px] px-[6px]">npx cloudflared tunnel --url http://localhost:3000</code>{' '}
+            (use the port this app runs on)
+          </li>
+          <li>Copy the https://….trycloudflare.com address it prints and paste it here</li>
+          <li>Quick tunnels get a new address every time they start, update it here when it changes</li>
+        </ol>
+        <Input label="Public URL" placeholder="https://something.trycloudflare.com" value={value} onChange={(e) => setValue(e.target.value)} removeError />
+        {status && (
+          <div className={clsx('text-[13px] rounded-[8px] p-[10px] border', status.ok ? 'text-green-400 bg-green-500/10 border-green-500/30' : 'text-red-400 bg-red-500/10 border-red-500/30')}>
+            {status.ok ? 'This address reaches the app.' : status.message}
+          </div>
+        )}
+        <div className="flex gap-[8px]">
+          <Button secondary loading={loading} disabled={!value} onClick={() => test(value.trim())}>
+            Test
+          </Button>
+          <Button
+            onClick={() => {
+              setPublicUrl(value);
+              toaster.show('Public URL saved', 'success');
+            }}
+          >
+            Save
+          </Button>
+        </div>
+      </Card>
+    </Section>
+  );
+};
+
 const tabs = [
   { tab: 'global_settings', label: 'Global Settings', component: GlobalSettings },
+  { tab: 'public_url', label: 'Public URL', component: PublicUrl },
   { tab: 'webhooks', label: 'Webhooks', component: Webhooks },
   { tab: 'sets', label: 'Sets', component: Sets },
   { tab: 'signatures', label: 'Signatures', component: Signatures },

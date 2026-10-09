@@ -11,11 +11,14 @@ import { makeId } from '@/lib/utils';
 import { getProvider } from '@/lib/providers';
 
 // required dropdowns start on their first option, like the provider DTO defaults
-const defaultSettings = (identifier: string) =>
+const defaultSettings = (integration: Integration) =>
   Object.fromEntries(
-    (getProvider(identifier).settings || [])
-      .filter((f) => f.type === 'select' && f.required && f.options?.length)
-      .map((f) => [f.key, f.options![0].value])
+    (getProvider(integration.identifier).settings || [])
+      .map((f) => [f.key, (integration.dynamicOptions?.[f.key] || f.options)?.[0]?.value] as const)
+      .filter(([key, value]) => {
+        const field = getProvider(integration.identifier).settings!.find((f) => f.key === key)!;
+        return field.type === 'select' && field.required && value;
+      })
   );
 
 export interface SelectedIntegration {
@@ -152,7 +155,7 @@ export const useLaunchStore = create<LaunchState>()((set) => ({
       return {
         selectedIntegrations: [
           ...state.selectedIntegrations,
-          { integration, settings: { ...defaultSettings(integration.identifier), ...settings } },
+          { integration, settings: { ...defaultSettings(integration), ...settings } },
         ],
       };
     }),

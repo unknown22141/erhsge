@@ -24,8 +24,23 @@ export interface ProviderDefinition {
   customFields?: { key: string; label: string; type: 'text' | 'password' }[];
   // can connect and publish for real from this app
   real?: boolean;
-  connect?: { key: string; label: string; type: 'text' | 'password'; placeholder?: string; default?: string }[];
+  connect?: {
+    key: string;
+    label: string;
+    type: 'text' | 'password' | 'select';
+    placeholder?: string;
+    default?: string;
+    optional?: boolean;
+    options?: { value: string; label: string }[];
+  }[];
+  // {redirectUri} in the help is replaced by the address to register
   help?: string[];
+  // connects with the platform sign in page instead of keys
+  oauth?: boolean;
+  // the platform only accepts https sign in addresses
+  httpsRedirect?: boolean;
+  // the setting choices come from the account (e.g. Pinterest boards)
+  dynamicSettings?: string[];
   settings?: SettingField[];
   // a video is required to post
   requiresMedia?: boolean;
@@ -63,6 +78,18 @@ export const providers: ProviderDefinition[] = [
         type: 'checkbox',
       },
     ],
+    real: true,
+    connect: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'apiSecret', label: 'API Key Secret', type: 'password' },
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+      { key: 'accessSecret', label: 'Access Token Secret', type: 'password' },
+    ],
+    help: [
+      'Open developer.x.com → Projects & Apps → your app (the Free plan works)',
+      'User authentication settings: set App permissions to "Read and write" and save',
+      'Keys and tokens: copy the API Key and Secret, then generate the Access Token and Secret (after the permission change)',
+    ],
   },
   {
     identifier: 'linkedin',
@@ -70,12 +97,12 @@ export const providers: ProviderDefinition[] = [
     editor: 'normal',
     maxChars: 3000,
     comments: true,
-    settings: [
-      {
-        key: 'post_as_images_carousel',
-        label: 'Post as images carousel',
-        type: 'checkbox',
-      },
+    real: true,
+    connect: [{ key: 'accessToken', label: 'Access token', type: 'password' }],
+    help: [
+      'linkedin.com/developers → Create app, then in Products add "Share on LinkedIn" and "Sign In with LinkedIn using OpenID Connect"',
+      'Docs and tools → OAuth Token Tools → Create token: pick your app and the openid, profile, email and w_member_social scopes',
+      'Paste the access token here. It lasts 60 days, then use Reconnect channel',
     ],
   },
   {
@@ -111,12 +138,24 @@ export const providers: ProviderDefinition[] = [
         key: 'type',
         label: 'Type',
         type: 'select',
+        required: true,
         options: [
           { value: 'self', label: 'Text' },
-          { value: 'link', label: 'Link' },
-          { value: 'media', label: 'Media' },
+          { value: 'link', label: 'Link (the first link of the text)' },
         ],
       },
+    ],
+    real: true,
+    connect: [
+      { key: 'clientId', label: 'Client ID', type: 'text', placeholder: 'The id under "personal use script"' },
+      { key: 'clientSecret', label: 'Secret', type: 'password' },
+      { key: 'username', label: 'Reddit username', type: 'text' },
+      { key: 'password', label: 'Reddit password', type: 'password' },
+    ],
+    help: [
+      'reddit.com/prefs/apps → create another app → choose "script", redirect uri http://localhost',
+      'Paste the id shown under the app name and the secret, with your Reddit username and password',
+      'Accounts with two-factor authentication can not use a script app',
     ],
   },
   {
@@ -141,7 +180,7 @@ export const providers: ProviderDefinition[] = [
   },
   {
     identifier: 'instagram-standalone',
-    name: 'Instagram\n(Standalone)',
+    name: 'Instagram',
     editor: 'normal',
     maxChars: 2200,
     comments: 'no-media',
@@ -157,6 +196,14 @@ export const providers: ProviderDefinition[] = [
         ],
       },
     ],
+    real: true,
+    connect: [{ key: 'accessToken', label: 'Instagram access token', type: 'password' }],
+    help: [
+      'Your Instagram account must be a Business or Creator account',
+      'developers.facebook.com → Create app → use case "Manage messaging & content on Instagram"',
+      'API setup with Instagram login → Generate access tokens → add your account and click Generate token',
+      'Instagram downloads pictures from a public link: set the Public URL in Settings before posting',
+    ],
   },
   {
     identifier: 'facebook',
@@ -165,6 +212,19 @@ export const providers: ProviderDefinition[] = [
     maxChars: 63206,
     comments: true,
     settings: [{ key: 'url', label: 'Embedded URL (only for text Post)', type: 'input' }],
+    real: true,
+    connect: [
+      { key: 'appId', label: 'App ID', type: 'text' },
+      { key: 'appSecret', label: 'App secret', type: 'password' },
+      { key: 'userToken', label: 'User access token', type: 'password' },
+      { key: 'pageId', label: 'Page name or ID', type: 'text', optional: true, placeholder: 'Optional, your first page by default' },
+    ],
+    help: [
+      'developers.facebook.com → Create app → use case "Manage everything on your Page"',
+      'App settings → Basic: copy the App ID and App secret',
+      'Tools → Graph API Explorer: pick your app, add pages_show_list, pages_manage_posts and pages_read_engagement, click Generate Access Token',
+      'Paste that token, it is exchanged for a page token that does not expire',
+    ],
   },
   {
     identifier: 'threads',
@@ -172,6 +232,14 @@ export const providers: ProviderDefinition[] = [
     editor: 'normal',
     maxChars: 500,
     comments: true,
+    real: true,
+    connect: [{ key: 'accessToken', label: 'Threads access token', type: 'password' }],
+    help: [
+      'developers.facebook.com → Create app → use case "Access the Threads API"',
+      'Use case settings: add your Threads account as a tester, then accept it in Threads (Settings → Account → Website permissions)',
+      'Generate an access token with threads_basic and threads_content_publish and paste it here',
+      'Threads downloads pictures from a public link: set the Public URL in Settings to post pictures',
+    ],
   },
   {
     identifier: 'youtube',
@@ -204,6 +272,18 @@ export const providers: ProviderDefinition[] = [
       },
       { key: 'tags', label: 'Tags', type: 'input', placeholder: 'tag1, tag2' },
     ],
+    real: true,
+    oauth: true,
+    connect: [
+      { key: 'clientId', label: 'Client ID', type: 'text' },
+      { key: 'clientSecret', label: 'Client secret', type: 'password' },
+    ],
+    help: [
+      'console.cloud.google.com → new project → APIs & Services → enable "YouTube Data API v3"',
+      'OAuth consent screen: External, and add your Google account as a test user',
+      'Credentials → Create OAuth client ID → Web application, with this redirect URI: {redirectUri}',
+      'Paste the Client ID and Client secret and click Sign in',
+    ],
   },
   {
     identifier: 'tiktok',
@@ -230,6 +310,19 @@ export const providers: ProviderDefinition[] = [
       { key: 'comment', label: 'Allow Comments', type: 'checkbox' },
       { key: 'brand_content_toggle', label: 'Branded content', type: 'checkbox' },
     ],
+    real: true,
+    oauth: true,
+    httpsRedirect: true,
+    connect: [
+      { key: 'clientId', label: 'Client key', type: 'text' },
+      { key: 'clientSecret', label: 'Client secret', type: 'password' },
+    ],
+    help: [
+      'developers.tiktok.com → Manage apps → Connect an app, add the Login Kit and Content Posting API products (turn on Direct Post)',
+      'In Login Kit add this Redirect URI: {redirectUri}',
+      'Paste the Client key and Client secret and click Sign in. Add your account as a target user while the app is in sandbox',
+      'Until TikTok audits your app, videos are posted as private (Only me)',
+    ],
   },
   {
     identifier: 'pinterest',
@@ -241,17 +334,29 @@ export const providers: ProviderDefinition[] = [
     settings: [
       { key: 'title', label: 'Title', type: 'input' },
       { key: 'link', label: 'Link', type: 'input' },
+      { key: 'board', label: 'Select Board', type: 'select', required: true, options: [] },
+    ],
+    real: true,
+    oauth: true,
+    dynamicSettings: ['board'],
+    connect: [
+      { key: 'clientId', label: 'App ID', type: 'text' },
+      { key: 'clientSecret', label: 'App secret key', type: 'password' },
       {
-        key: 'board',
-        label: 'Select Board',
+        key: 'sandbox',
+        label: 'Access level',
         type: 'select',
-        required: true,
+        default: 'no',
         options: [
-          { value: 'inspiration', label: 'Inspiration' },
-          { value: 'marketing', label: 'Marketing tips' },
-          { value: 'product', label: 'Product' },
+          { value: 'no', label: 'Standard access' },
+          { value: 'yes', label: 'Trial access (pins go to the sandbox)' },
         ],
       },
+    ],
+    help: [
+      'developers.pinterest.com → My apps → Connect app (you need a Pinterest business account)',
+      'Add this redirect URI to the app: {redirectUri}',
+      'Paste the App ID and App secret key and click Sign in',
     ],
   },
   {

@@ -37,7 +37,7 @@ export const ProviderSettings: FC = () => {
                 onChange={(e) => setSettings(selected.integration.id, { [field.key]: e.target.value })}
               >
                 <option value="">--Select--</option>
-                {field.options?.map((o) => (
+                {(selected.integration.dynamicOptions?.[field.key] || field.options)?.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

@@ -1,41 +1,17 @@
 import { loadMedia, MediaRef } from './media';
 import { toMarkdown, toPlainText, toTelegramHtml } from './text';
 
-export type Credentials = Record<string, string>;
+import { AuthError, ChannelInfo, check, Credentials, PublishContext, sleep } from './http';
+import { socialProviders } from './social';
 
-export interface ChannelInfo {
-  internalId: string;
-  name: string;
-  display: string;
-  picture?: string;
-}
+export { AuthError };
+export type { Credentials };
 
 export interface PostValue {
   content: string;
   media: MediaRef[];
   delay?: number;
 }
-
-export class AuthError extends Error {}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const readError = async (res: Response) => {
-  const text = await res.text();
-  try {
-    const json = JSON.parse(text);
-    return json.message || json.error_description || json.description || json.error || text;
-  } catch {
-    return text || res.statusText;
-  }
-};
-
-const check = async (res: Response, what: string) => {
-  if (res.ok) return res;
-  const message = `${what}: ${await readError(res)}`;
-  if (res.status === 401 || res.status === 403) throw new AuthError(message);
-  throw new Error(message);
-};
 
 // ---------- Bluesky (AT Protocol) ----------
 const bskyService = (c: Credentials) => (c.service || 'https://bsky.social').replace(/\/$/, '');
@@ -310,10 +286,23 @@ const discord = {
   },
 };
 
-const registry: Record<string, {
-  verify: (c: Credentials) => Promise<ChannelInfo>;
-  publish: (c: Credentials, values: PostValue[], settings: Record<string, any>) => Promise<{ releaseURL: string }>;
-}> = { bluesky, mastodon, telegram, discord };
+export interface ServerProvider {
+  // keys typed by the user, checked against the platform
+  verify?: (c: Credentials) => Promise<ChannelInfo>;
+  // "Sign in with ..." flow
+  oauth?: {
+    authUrl: (c: Credentials, redirectUri: string, state: string) => string;
+    exchange: (c: Credentials, code: string, redirectUri: string) => Promise<ChannelInfo>;
+  };
+  publish: (
+    c: Credentials,
+    values: PostValue[],
+    settings: Record<string, any>,
+    ctx: PublishContext
+  ) => Promise<{ releaseURL: string }>;
+}
+
+const registry: Record<string, ServerProvider> = { bluesky, mastodon, telegram, discord, ...socialProviders };
 
 export const realProviders = Object.keys(registry);
 

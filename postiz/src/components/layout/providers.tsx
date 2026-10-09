@@ -10,6 +10,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { useMounted } from '@/lib/hooks';
 import { useDb } from '@/lib/db';
 import { startSync } from '@/lib/sync';
+import { OAuthReturn } from '@/components/launches/add.provider';
 import { useMode } from './mode';
 
 // Sends the scheduled posts to the local server, which publishes them
@@ -49,6 +50,7 @@ export const Providers = ({ children }: { children: ReactNode }) => {
       <PersistSeed />
       <ApplyMode />
       <Publisher />
+      <OAuthReturn />
       <Toaster />
       <Tooltip
         id="tooltip"

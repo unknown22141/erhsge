@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic';
 // the browser sends every scheduled post, the server publishes them when they are due
 export async function PUT(req: Request) {
   startScheduler();
-  const { jobs = [], webhooks = [] } = await req.json();
-  const count = await syncJobs(jobs, webhooks);
+  const { jobs = [], webhooks = [], settings = {} } = await req.json();
+  const count = await syncJobs(jobs, webhooks, settings);
   runDue().catch(() => {});
   return NextResponse.json({ queued: count });
 }

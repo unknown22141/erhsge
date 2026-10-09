@@ -8,7 +8,7 @@ import { toast } from '@/components/ui/toaster';
 import { getProvider } from './providers';
 
 const buildJobs = () => {
-  const { posts, integrations, webhooks } = useDb.getState();
+  const { posts, integrations, webhooks, publicUrl } = useDb.getState();
   const jobs = posts
     .filter((p) => p.state === 'QUEUE')
     .map((post) => {
@@ -34,6 +34,7 @@ const buildJobs = () => {
   return {
     jobs,
     webhooks: webhooks.map((w) => ({ url: w.url, integrations: w.integrations })),
+    settings: { publicUrl },
   };
 };
 
@@ -80,7 +81,7 @@ const pullResults = async () => {
 export const startSync = () => {
   pushJobs(true);
   const unsubscribe = useDb.subscribe((state, prev) => {
-    if (state.posts === prev.posts && state.integrations === prev.integrations && state.webhooks === prev.webhooks) return;
+    if (state.posts === prev.posts && state.integrations === prev.integrations && state.webhooks === prev.webhooks && state.publicUrl === prev.publicUrl) return;
     clearTimeout(timeout);
     timeout = setTimeout(() => pushJobs(), 300);
   });

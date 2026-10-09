@@ -11,6 +11,7 @@ export const createIntegration = (data: {
   picture?: string;
   internalId?: string;
   credentials?: Record<string, string>;
+  dynamicOptions?: Integration['dynamicOptions'];
   customer?: Customer;
 }): Integration => ({
   id: makeId(12),
@@ -26,6 +27,7 @@ export const createIntegration = (data: {
   time: defaultTimes.map((p) => ({ ...p })),
   preferences: {},
   credentials: data.credentials,
+  dynamicOptions: data.dynamicOptions,
 });
 
 // a new workspace starts empty

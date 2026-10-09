@@ -1,18 +1,27 @@
 'use client';
 
 import clsx from 'clsx';
-import { FC, useCallback, useState } from 'react';
+import { FC, useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/form';
+import { Input, Select } from '@/components/ui/form';
 import { openModal, useModals } from '@/components/ui/modal';
-import { useToaster } from '@/components/ui/toaster';
+import { toast, useToaster } from '@/components/ui/toaster';
 import { useDb } from '@/lib/db';
 import { getProvider, platformIcon, ProviderDefinition, providers } from '@/lib/providers';
 import { Integration } from '@/lib/types';
 
-// Connects an account with its keys, checked against the platform
+// the address the platform sends the user back to after "Sign in"
+export const redirectUriFor = (provider: ProviderDefinition, publicUrl: string) => {
+  const base = (publicUrl || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  const uri = `${base}/api/oauth/${provider.identifier}/callback`;
+  // like Postiz, an http address goes through redirectmeto.com for the platforms that require https
+  return provider.httpsRedirect && !uri.startsWith('https://') ? `https://redirectmeto.com/${uri}` : uri;
+};
+
+// Connects an account with its keys (checked against the platform) or with the platform sign in page
 const ConnectChannel: FC<{ provider: ProviderDefinition; existing?: Integration; close: () => void }> = ({ provider, existing, close }) => {
   const addIntegration = useDb((s) => s.addIntegration);
+  const publicUrl = useDb((s) => s.publicUrl);
   const toaster = useToaster();
   const providerName = provider.name.split('\n')[0];
   const [values, setValues] = useState<Record<string, string>>(() =>
@@ -21,11 +30,23 @@ const ConnectChannel: FC<{ provider: ProviderDefinition; existing?: Integration;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const redirectUri = redirectUriFor(provider, publicUrl);
 
   const connect = async () => {
     setLoading(true);
     setError('');
     try {
+      if (provider.oauth) {
+        const res = await fetch('/api/oauth/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: provider.identifier, credentials: values, redirectUri, returnTo: window.location.origin }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        window.location.href = data.url;
+        return;
+      }
       const res = await fetch('/api/integrations/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,7 +60,8 @@ const ConnectChannel: FC<{ provider: ProviderDefinition; existing?: Integration;
         display: data.display,
         picture: data.picture,
         internalId: data.internalId,
-        credentials: values,
+        credentials: data.credentials || values,
+        dynamicOptions: data.options,
       });
       setDone(true);
       toaster.show(existing ? 'Channel reconnected' : 'Channel added', 'success');
@@ -63,36 +85,66 @@ const ConnectChannel: FC<{ provider: ProviderDefinition; existing?: Integration;
     );
   }
 
-  const filled = (provider.connect || []).every((f) => values[f.key]?.trim());
+  const filled = (provider.connect || []).every((f) => f.optional || values[f.key]?.trim());
 
   return (
-    <div className="flex flex-col gap-[12px] w-[460px] max-w-full">
+    <div className="flex flex-col gap-[12px] w-[520px] max-w-full">
       <div className="flex gap-[12px] p-[16px] rounded-[12px] bg-newTableHeader">
         <img src={platformIcon(provider.identifier)} className="w-[40px] h-[40px] rounded-full" alt="" />
-        <div className="text-[14px] flex flex-col gap-[4px]">
+        <div className="text-[14px] flex flex-col gap-[4px] min-w-0">
           <div className="font-[600]">How to connect {providerName}</div>
-          <ol className="list-decimal ps-[18px] text-textItemBlur text-[13px] flex flex-col gap-[2px]">
-            {provider.help?.map((h) => (
-              <li key={h}>{h}</li>
-            ))}
+          <ol className="list-decimal ps-[18px] text-textItemBlur text-[13px] flex flex-col gap-[4px]">
+            {provider.help?.map((h) =>
+              h.includes('{redirectUri}') ? (
+                <li key={h}>
+                  {h.split('{redirectUri}')[0]}
+                  <span
+                    className="text-newTextColor bg-newBgColorInner border border-newTableBorder rounded-[6px] px-[6px] py-[2px] font-mono text-[12px] break-all cursor-pointer hover:border-[#612BD3]"
+                    data-tooltip-id="tooltip"
+                    data-tooltip-content="Click to copy"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(redirectUri);
+                      } catch {}
+                      toaster.show('Redirect URI copied', 'success');
+                    }}
+                  >
+                    {redirectUri}
+                  </span>
+                  {h.split('{redirectUri}')[1]}
+                </li>
+              ) : (
+                <li key={h}>{h}</li>
+              )
+            )}
           </ol>
         </div>
       </div>
-      {provider.connect?.map((f) => (
-        <Input
-          key={f.key}
-          label={f.label}
-          type={f.type}
-          placeholder={f.placeholder}
-          value={values[f.key] || ''}
-          onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
-          removeError
-        />
-      ))}
-      {error && <div className="text-red-400 text-[13px] bg-red-500/10 border border-red-500/30 rounded-[8px] p-[10px] break-words">{error}</div>}
+      {provider.connect?.map((f) =>
+        f.type === 'select' ? (
+          <Select key={f.key} label={f.label} hideErrors value={values[f.key] || ''} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}>
+            {f.options?.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <Input
+            key={f.key}
+            label={f.label}
+            type={f.type}
+            placeholder={f.placeholder}
+            value={values[f.key] || ''}
+            onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+            removeError
+          />
+        )
+      )}
+      {error && <div className="text-red-400 text-[13px] bg-red-500/10 border border-red-500/30 rounded-[8px] p-[10px] break-words whitespace-pre-wrap">{error}</div>}
       <div className="text-[12px] text-textItemBlur">Your keys are stored on this computer only and sent only to {providerName}.</div>
       <Button onClick={connect} loading={loading} disabled={!filled} className="mt-[4px] !h-[44px]">
-        {existing ? 'Reconnect' : 'Connect'} {providerName}
+        {provider.oauth ? `Sign in with ${providerName}` : `${existing ? 'Reconnect' : 'Connect'} ${providerName}`}
       </Button>
     </div>
   );
@@ -107,6 +159,44 @@ export const openConnect = (provider: ProviderDefinition, existing?: Integration
 
 export const reconnectChannel = (integration: Integration) => openConnect(getProvider(integration.identifier), integration);
 
+// Finishes a "Sign in with ..." when the platform sends the user back
+export const OAuthReturn = () => {
+  const addIntegration = useDb((s) => s.addIntegration);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const state = params.get('oauth');
+    const error = params.get('oauth_error');
+    if (!state && !error) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    const fail = (message: string) =>
+      openModal({
+        title: 'Could not connect the channel',
+        closeOnClickOutside: true,
+        children: <div className="text-[14px] text-textItemBlur max-w-[520px] break-words">{message}</div>,
+      });
+    if (error) {
+      fail(error);
+      return;
+    }
+    (async () => {
+      const res = await fetch(`/api/oauth/result?state=${state}`);
+      const data = await res.json();
+      if (!res.ok) return fail(data.message);
+      addIntegration({
+        identifier: data.identifier,
+        name: data.name,
+        display: data.display,
+        picture: data.picture,
+        internalId: data.internalId,
+        credentials: data.credentials,
+        dynamicOptions: data.options,
+      });
+      toast('Channel added', 'success');
+    })();
+  }, [addIntegration]);
+  return null;
+};
+
 export const AddProviderComponent: FC<{ onPick: (provider: ProviderDefinition) => void }> = ({ onPick }) => {
   const sorted = [...providers.filter((p) => p.real), ...providers.filter((p) => !p.real)];
   return (
@@ -119,7 +209,7 @@ export const AddProviderComponent: FC<{ onPick: (provider: ProviderDefinition) =
             style={{ animationDelay: `${index * 15}ms` }}
             {...(!item.real && {
               'data-tooltip-id': 'tooltip',
-              'data-tooltip-content': 'Needs a registered developer app with API keys, use the self-hosted Postiz for this one',
+              'data-tooltip-content': 'Not available in this app yet',
             })}
             className={clsx(
               'flex-col p-[10px] h-[100px] justify-center mobile:text-[13px] mobile:leading-[1.2] w-full text-[14px] rounded-[8px] bg-newTableHeader text-textColor relative items-center flex gap-[10px] opacity-0 animate-fadeIn border border-transparent',
@@ -139,7 +229,7 @@ export const AddProviderComponent: FC<{ onPick: (provider: ProviderDefinition) =
         ))}
       </div>
       <div className="text-[13px] text-textItemBlur flex items-center gap-[6px]">
-        <div className="w-[8px] h-[8px] rounded-full bg-green-500" /> Connect and publish for real. Greyed out platforms need their own developer app and API keys.
+        <div className="w-[8px] h-[8px] rounded-full bg-green-500" /> Connects and publishes for real with your own account and keys.
       </div>
     </div>
   );
